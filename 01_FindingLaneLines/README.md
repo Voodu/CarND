@@ -1,56 +1,41 @@
 # **Finding Lane Lines on the Road** 
 [![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
-<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
+### Reflection
 
-Overview
----
+### 1. Describe your pipeline. As part of the description, explain how you modified the draw_lines() function.
 
-When we drive, we use our eyes to decide where to go.  The lines on the road that show us where the lanes are act as our constant reference for where to steer the vehicle.  Naturally, one of the first things we would like to do in developing a self-driving car is to automatically detect lane lines using an algorithm.
+My pipeline consisted of 7 steps. First, I created a copy of my image the applied the filters below:
+- `grayscale` - as canny edge detection works correctly only on grayscale images
+- `gaussian_blur` - as additional tweaking for canny edge detection
+- `canny` - to detect edges in the image
+- `region_of_interest` - to reduce amount of edges which Hough's transform needs to process
+- `hough_lines` - to detect lines
+  - it also included extrapolating of the line fragments to cover the whole FoV
+- `region_of_interest` - to remove excessive line fragments after extrapolation
+- `weighted_img` - to overlay detected lanes on the original image
 
-In this project you will detect lane lines in images using Python and OpenCV.  OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.  
-
-To complete the project, two files will be submitted: a file containing project code and a file containing a brief write up explaining your solution. We have included template files to be used both for the [code](https://github.com/udacity/CarND-LaneLines-P1/blob/master/P1.ipynb) and the [writeup](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md).The code file is called P1.ipynb and the writeup template is writeup_template.md 
-
-To meet specifications in the project, take a look at the requirements in the [project rubric](https://review.udacity.com/#!/rubrics/322/view)
-
-
-Creating a Great Writeup
----
-For this project, a great writeup should provide a detailed response to the "Reflection" section of the [project rubric](https://review.udacity.com/#!/rubrics/322/view). There are three parts to the reflection:
-
-1. Describe the pipeline
-
-2. Identify any shortcomings
-
-3. Suggest possible improvements
-
-We encourage using images in your writeup to demonstrate how your pipeline works.  
-
-All that said, please be concise!  We're not looking for you to write a book here: just a brief description.
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup. Here is a link to a [writeup template file](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md). 
+In order to draw a single line on the left and right lanes, I modified the draw_lines() function by
+1. Calculating the slopes of all the lines
+2. Grouping them in right and left lane according to the slope values (0.4 to 0.8 belong to the right lane, -0.8 to -0.4 belong to the left lane; the others are just noise)
+3. Then, for right and left lane separately replace all the lines with the average one:
+   1. Calculate the averages of all the coordinates (x1, y1, x2, y2)
+   2. Using `np.polyfit` and `np.poly1d` get the function based on the average points
+   3. Calculate the line parameters for the whole X range which is relevant (i.e. from 0 to image width)
+4. In the end draw the two average lines
 
 
-The Project
----
+### 2. Identify potential shortcomings with your current pipeline
 
-## If you have already installed the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) you should be good to go!   If not, you should install the starter kit to get started on this project. ##
+1. The lines sometimes disappear completely, i.e. probably the Hough's transform has problems detecting any line on some frames
+2. The lines are shaking. I included 'amortization' by doing the average of the current and previous line positions, but it still does not look right
+3. It goes crazy on the challenge video. Sun, different position of the camera and sharp edges of the barriers make the algorithm completely confused
+4. It calculates the RoI twice, which would be not necessary if the `draw_lines()` was implemented better, but it was just the fastest way to code it 
 
-**Step 1:** Set up the [CarND Term1 Starter Kit](https://classroom.udacity.com/nanodegrees/nd013/parts/fbf77062-5703-404e-b60c-95b78b2f3f9e/modules/83ec35ee-1e02-48a5-bdb7-d244bd47c2dc/lessons/8c82408b-a217-4d09-b81d-1bda4c6380ef/concepts/4f1870e0-3849-43e4-b670-12e6f2d4b7a7) if you haven't already.
 
-**Step 2:** Open the code in a Jupyter Notebook
+### 3. Suggest possible improvements to your pipeline
 
-You will complete the project code in a Jupyter notebook.  If you are unfamiliar with Jupyter Notebooks, check out <A HREF="https://www.packtpub.com/books/content/basics-jupyter-notebook-and-python" target="_blank">Cyrille Rossant's Basics of Jupyter Notebook and Python</A> to get started.
-
-Jupyter is an Ipython notebook where you can run blocks of code and see results interactively.  All the code for this project is contained in a Jupyter notebook. To start Jupyter in your browser, use terminal to navigate to your project directory and then run the following command at the terminal prompt (be sure you've activated your Python 3 carnd-term1 environment as described in the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) installation instructions!):
-
-`> jupyter notebook`
-
-A browser window will appear showing the contents of the current directory.  Click on the file called "P1.ipynb".  Another browser window will appear displaying the notebook.  Follow the instructions in the notebook to complete the project.  
-
-**Step 3:** Complete the project and submit both the Ipython notebook and the project writeup
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+1. Smoothing out the shaking - currently it is average from current and previous reading. If the size of 'history' was increased, the smoothing would surely work better
+2. `draw_lines()` function can be improved not to draw lines over the whole image, but only up to the horizon. Then the second RoI would be unnecessary. Also it would look much better on the challenge video.
+3. The detection of the current frame line should use more information from the previous frame. It would enable to mitigate that confusion in the challenge video. Ex. under normal circumstances the line on one frame cannot be too far away from  the line on the preceeding frame, so some kind of 'validity zone' can be used. 
+4. Probably RoI may be slightly adjusted to be more generic. Currently the slightest change in the camera position makes it useless (as in the challenge video)
